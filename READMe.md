@@ -15,20 +15,37 @@ Using **Npm**:
 npm install is-equal
 
 ✨ Features
-✅ Deep comparison of: Primitives, Arrays, ObjectsMap, Set, Date, Circular references
+✅ Deep comparison of: Primitives, Arrays, Objects, Map, Set, Date, Typed Arrays, Circular references
+✅ Optional normalization of boxed primitives (String, Number, Boolean)
 ✅ TypeScript support with .d.ts declarations
 ✅ ESM output for modern bundlers
+✅ Handles sparse arrays and prototype mismatches (configurable)
 
 🔄 API
 
 ```TypeScript
-isEqual(a: unknown, b: unknown): boolean
+isEqual(a: unknown, b: unknown, opts?: EqualityOptions): boolean
+```
+a – First value to compare
+
+b – Second value to compare
+
+opts – Optional comparison settings:
+
+Returns true if values a and b are deeply equal, false otherwise.
+
+```TypeScript
+interface EqualityOptions {
+  strictSparseArrays?: boolean;       // Differentiates between missing array elements and undefined
+  normalizeBoxedPrimitives?: boolean; // Unwraps boxed primitives before comparison
+  allowPrototypeMismatch?: boolean;    // Ignore prototype differences for objects
+}
 ```
 
-Returns true if values a and b are deeply equal.
-
 🔧 Usage
+```TypeScript
 import { isEqual } from 'is-equal';
+```
 
 🔁 Example: Map containing a Set with nested Set and Map of objects
 
@@ -52,6 +69,7 @@ const map1 = new Map([['data', set1]]);
 const map2 = new Map([['data', set2]]);
 
 console.log(isEqual(map1, map2)); // true
+
 ```
 
 🔁 Example: Set containing a Map with a nested Set and Map of objects
@@ -105,16 +123,27 @@ console.log(isEqual(map1, map2)); // false
 
 ```
 
+Boxed primitives with normalization
+```TypeScript
+console.log(isEqual(new String('a'), 'a', { normalizeBoxedPrimitives: true })); // true
+console.log(isEqual(new Number(1), 1, { normalizeBoxedPrimitives: true })); // true
+console.log(isEqual(new Boolean(true), true, { normalizeBoxedPrimitives: true })); // true
+```
+
 # Tests
 
 🧪 Running Tests
-Basic tests use Vitest:
+This library uses Vitest for testing.
+
+Run tests with Yarn:
 yarn test
 or npm run test
 
-Tests include:
+Test coverage includes:
 
 Primitives and edge cases
+
+Boxed primitives
 
 Arrays and nested objects
 
@@ -122,7 +151,9 @@ Circular references
 
 Deeply nested Map and Set combinations
 
-Refer to the test/ folder for full coverage.
+Sparse arrays and prototype mismatch cases
+
+Refer to the test/ folder for the full test suite.
 
 📝 License
 MIT © is-deep-equal
