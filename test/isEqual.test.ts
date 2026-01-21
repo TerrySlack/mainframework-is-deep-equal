@@ -215,3 +215,71 @@ describe("isEqual - mixed types and edge cases", () => {
     expect(isEqual(undefined, null)).toBe(false);
   });
 });
+describe("isEqual - boxed primitives", () => {
+  it("compares boxed primitives without normalization", () => {
+    expect(isEqual(new String("a"), "a")).toBe(false);
+    expect(isEqual(new Number(1), 1)).toBe(false);
+    expect(isEqual(new Boolean(true), true)).toBe(false);
+  });
+
+  it("compares boxed primitives with normalization", () => {
+    expect(isEqual(new String("a"), "a", { normalizeBoxedPrimitives: true })).toBe(true);
+    expect(isEqual(new Number(1), 1, { normalizeBoxedPrimitives: true })).toBe(true);
+    expect(isEqual(new Boolean(true), true, { normalizeBoxedPrimitives: true })).toBe(true);
+  });
+
+  it("compares boxed primitives with extra properties", () => {
+    const s1 = Object.assign(new String("a"), { x: 1 });
+    const s2 = Object.assign(new String("a"), { x: 1 });
+    expect(isEqual(s1, s2, { normalizeBoxedPrimitives: true })).toBe(true);
+  });
+});
+
+describe("isEqual - sparse arrays", () => {
+  it("compares sparse arrays when strictSparseArrays=false", () => {
+    expect(isEqual([1, , 3], [1, undefined, 3])).toBe(true);
+  });
+
+  it("compares sparse arrays when strictSparseArrays=true", () => {
+    expect(isEqual([1, , 3], [1, undefined, 3], { strictSparseArrays: true })).toBe(false);
+  });
+});
+
+describe("isEqual - typed arrays", () => {
+  it("compares typed arrays with same contents", () => {
+    expect(isEqual(new Uint8Array([1, 2]), new Uint8Array([1, 2]))).toBe(true);
+  });
+
+  it("returns false for typed arrays of different types", () => {
+    expect(isEqual(new Uint8Array([1, 2]), new Int8Array([1, 2]))).toBe(false);
+  });
+
+  it("returns false for typed arrays with different contents", () => {
+    expect(isEqual(new Uint8Array([1, 2]), new Uint8Array([2, 1]))).toBe(false);
+  });
+});
+
+describe("isEqual - prototype mismatch", () => {
+  it("returns true when allowPrototypeMismatch=true", () => {
+    const a = Object.create(null);
+    a.x = 1;
+    const b = { x: 1 };
+    expect(isEqual(a, b, { allowPrototypeMismatch: true })).toBe(true);
+  });
+
+  it("returns false when allowPrototypeMismatch=false", () => {
+    const a = Object.create(null);
+    a.x = 1;
+    const b = { x: 1 };
+    expect(isEqual(a, b)).toBe(false);
+  });
+});
+
+describe("isEqual - function reference", () => {
+  it("compares functions by reference only", () => {
+    const fn1 = () => {};
+    const fn2 = () => {};
+    expect(isEqual(fn1, fn1)).toBe(true);
+    expect(isEqual(fn1, fn2)).toBe(false);
+  });
+});
