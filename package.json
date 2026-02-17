@@ -1,6 +1,6 @@
 {
   "name": "@mainframework/is-deep-equal",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Deep equality comparison utility with support for objects, arrays, maps, sets, and circular refs",
   "type": "module",
   "main": "./dist/index.mjs",
