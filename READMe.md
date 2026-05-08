@@ -1,4 +1,4 @@
-# is-equal
+# @mainframework/is-deep-equal
 
 A robust, recursive deep equality checker that handles complex structures including `Map`, `Set`, `Date`, `nested objects`, `circular references`, and more — without mutating the input.
 
@@ -9,10 +9,10 @@ Built in TypeScript. Outputs a minified ESM module for JavaScript and TypeScript
 ## 📦 Installation
 
 Using **Yarn**:
-yarn add is-equal
+yarn add @mainframework/is-deep-equal
 
 Using **Npm**:
-npm install is-equal
+npm install @mainframework/is-deep-equal
 
 ✨ Features
 ✅ Deep comparison of: Primitives, Arrays, Objects, Map, Set, Date, Typed Arrays, Circular references
@@ -44,7 +44,13 @@ interface EqualityOptions {
 
 🔧 Usage
 ```TypeScript
-import { isEqual } from 'is-equal';
+import { isEqual } from '@mainframework/is-deep-equal';
+```
+
+Exported types are available from the same entrypoint:
+
+```TypeScript
+import type { EqualityOptions } from '@mainframework/is-deep-equal';
 ```
 
 🔁 Example: Map containing a Set with nested Set and Map of objects
