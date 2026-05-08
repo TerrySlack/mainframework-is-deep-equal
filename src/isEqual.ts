@@ -47,10 +47,19 @@ export const compareSet = (
 ) => {
   if (a.size !== b.size) return false;
 
+  // Fast path for primitive values: Set membership is O(1) and preserves Set semantics.
+  for (const aVal of a) {
+    if (isPrimitive(aVal)) {
+      if (!b.has(aVal)) return false;
+    }
+  }
+
   const bArray = Array.from(b);
   const used = new Set<number>();
 
   for (const aVal of a) {
+    if (isPrimitive(aVal)) continue;
+
     const exactIdx = bArray.findIndex((bVal, idx) => !used.has(idx) && aVal === bVal);
     if (exactIdx !== -1) { used.add(exactIdx); continue; }
 
@@ -134,13 +143,14 @@ export const compareObject = (
   memo: MemoCache,
   opts: EqualityOptions
 ) => {
-  let count = 0;
-  for (const key of Reflect.ownKeys(a)) {
+  const keysA = Reflect.ownKeys(a);
+  const keysB = Reflect.ownKeys(b);
+  if (keysA.length !== keysB.length) return false;
+
+  for (const key of keysA) {
     if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
     if (!isEqualWithMemo(a[key], b[key], memo, opts)) return false;
-    count++;
   }
-  if (Reflect.ownKeys(b).length !== count) return false;
   return true;
 };
 

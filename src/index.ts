@@ -1,1 +1,1 @@
-export { isEqual } from './isEqual';
+export * from "./isEqual";

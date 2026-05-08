@@ -1,1 +1,1 @@
-cross-env yarn lint-staged
+npx lint-staged;
