@@ -72,6 +72,14 @@ describe("isEqual - special types", () => {
     expect(isEqual(new A(), new A())).toBe(true);
     expect(isEqual(new A(), new B())).toBe(false);
   });
+
+  it("compares errors with custom own properties", () => {
+    const e1 = Object.assign(new Error("oops"), { code: 404 });
+    const e2 = Object.assign(new Error("oops"), { code: 404 });
+    const e3 = Object.assign(new Error("oops"), { code: 500 });
+    expect(isEqual(e1, e2)).toBe(true);
+    expect(isEqual(e1, e3)).toBe(false);
+  });
 });
 
 describe("isEqual - sets", () => {
@@ -157,7 +165,7 @@ describe("isEqual - maps", () => {
     expect(isEqual(new Map([["a", 1]]), new Map([["b", 1]]))).toBe(false);
   });
 });
-describe("isEqual - circular references", () => {
+describe("isEqual - maps", () => {
   it("returns false when nested maps have different object values", () => {
     const map1 = new Map([["group", new Map([["a", { x: 1 }]])]]);
     const map2 = new Map([["group", new Map([["a", { x: 2 }]])]]);
@@ -228,10 +236,16 @@ describe("isEqual - boxed primitives", () => {
     expect(isEqual(new Boolean(true), true, { normalizeBoxedPrimitives: true })).toBe(true);
   });
 
-  it("compares boxed primitives with extra properties", () => {
+  it("compares two identical boxed-primitive objects with extra properties", () => {
     const s1 = Object.assign(new String("a"), { x: 1 });
     const s2 = Object.assign(new String("a"), { x: 1 });
-    expect(isEqual(s1, s2, { normalizeBoxedPrimitives: true })).toBe(true);
+    expect(isEqual(s1, s2)).toBe(true);
+  });
+
+  it("returns false for boxed-primitive objects with differing extra properties", () => {
+    const s1 = Object.assign(new String("a"), { x: 1 });
+    const s2 = Object.assign(new String("a"), { x: 2 });
+    expect(isEqual(s1, s2)).toBe(false);
   });
 });
 
@@ -242,6 +256,10 @@ describe("isEqual - sparse arrays", () => {
 
   it("compares sparse arrays when strictSparseArrays=true", () => {
     expect(isEqual([1, , 3], [1, undefined, 3], { strictSparseArrays: true })).toBe(false);
+  });
+
+  it("returns true for two identical sparse arrays under strictSparseArrays=true", () => {
+    expect(isEqual([1, , 3], [1, , 3], { strictSparseArrays: true })).toBe(true);
   });
 });
 
@@ -256,6 +274,22 @@ describe("isEqual - typed arrays", () => {
 
   it("returns false for typed arrays with different contents", () => {
     expect(isEqual(new Uint8Array([1, 2]), new Uint8Array([2, 1]))).toBe(false);
+  });
+
+  it("returns true for typed arrays with unaligned byteOffset and equal bytes", () => {
+    const buf1 = new Uint8Array([0, 10, 20, 30, 40]).buffer;
+    const buf2 = new Uint8Array([0, 10, 20, 30, 40]).buffer;
+    const a = new Uint8Array(buf1, 1, 4);
+    const b = new Uint8Array(buf2, 1, 4);
+    expect(isEqual(a, b)).toBe(true);
+  });
+
+  it("returns false for typed arrays with unaligned byteOffset and different bytes", () => {
+    const buf1 = new Uint8Array([0, 10, 20, 30, 40]).buffer;
+    const buf2 = new Uint8Array([0, 10, 20, 30, 99]).buffer;
+    const a = new Uint8Array(buf1, 1, 4);
+    const b = new Uint8Array(buf2, 1, 4);
+    expect(isEqual(a, b)).toBe(false);
   });
 });
 
@@ -281,5 +315,159 @@ describe("isEqual - function reference", () => {
     const fn2 = () => {};
     expect(isEqual(fn1, fn1)).toBe(true);
     expect(isEqual(fn1, fn2)).toBe(false);
+  });
+});
+
+describe("isEqual - NaN", () => {
+  it("returns true for NaN compared to NaN", () => {
+    expect(isEqual(NaN, NaN)).toBe(true);
+  });
+
+  it("returns false for NaN compared to 0", () => {
+    expect(isEqual(NaN, 0)).toBe(false);
+  });
+});
+
+describe("isEqual - Error additional cases", () => {
+  it("returns false for errors with different names", () => {
+    expect(isEqual(new TypeError("oops"), new RangeError("oops"))).toBe(false);
+  });
+
+  it("returns true for errors with matching cause objects", () => {
+    const cause = { code: 42 };
+    const e1 = new Error("fail", { cause });
+    const e2 = new Error("fail", { cause: { code: 42 } });
+    expect(isEqual(e1, e2)).toBe(true);
+  });
+
+  it("returns false for errors with mismatched cause", () => {
+    const e1 = new Error("fail", { cause: { code: 1 } });
+    const e2 = new Error("fail", { cause: { code: 2 } });
+    expect(isEqual(e1, e2)).toBe(false);
+  });
+});
+
+describe("isEqual - RegExp", () => {
+  it("returns true for regexps with the same source and flags", () => {
+    expect(isEqual(/abc/gi, /abc/gi)).toBe(true);
+  });
+
+  it("returns false for regexps with different source", () => {
+    expect(isEqual(/abc/, /def/)).toBe(false);
+  });
+
+  it("returns false for regexps with different flags", () => {
+    expect(isEqual(/abc/i, /abc/g)).toBe(false);
+  });
+
+  it("returns false for regexps with same source but different flags", () => {
+    expect(isEqual(/abc/i, /abc/)).toBe(false);
+  });
+});
+
+describe("isEqual - ArrayBuffer", () => {
+  it("returns true for ArrayBuffers with the same bytes", () => {
+    const a = new Uint8Array([1, 2, 3, 4]).buffer;
+    const b = new Uint8Array([1, 2, 3, 4]).buffer;
+    expect(isEqual(a, b)).toBe(true);
+  });
+
+  it("returns false for ArrayBuffers with different lengths", () => {
+    const a = new Uint8Array([1, 2, 3]).buffer;
+    const b = new Uint8Array([1, 2, 3, 4]).buffer;
+    expect(isEqual(a, b)).toBe(false);
+  });
+
+  it("returns false for ArrayBuffers with same length but different bytes", () => {
+    const a = new Uint8Array([1, 2, 3, 4]).buffer;
+    const b = new Uint8Array([1, 2, 3, 5]).buffer;
+    expect(isEqual(a, b)).toBe(false);
+  });
+
+  it("returns true for equal ArrayBuffers whose length is not a multiple of 8 (tail-byte path)", () => {
+    const a = new Uint8Array([10, 20, 30]).buffer;
+    const b = new Uint8Array([10, 20, 30]).buffer;
+    expect(isEqual(a, b)).toBe(true);
+  });
+
+  it("returns false for unequal ArrayBuffers whose length is not a multiple of 8 (tail-byte path)", () => {
+    const a = new Uint8Array([10, 20, 30]).buffer;
+    const b = new Uint8Array([10, 20, 99]).buffer;
+    expect(isEqual(a, b)).toBe(false);
+  });
+});
+
+describe("isEqual - WeakMap, WeakSet, Promise", () => {
+  it("returns false for two WeakMaps", () => {
+    expect(isEqual(new WeakMap(), new WeakMap())).toBe(false);
+  });
+
+  it("returns false for two WeakSets", () => {
+    expect(isEqual(new WeakSet(), new WeakSet())).toBe(false);
+  });
+
+  it("returns false for two Promises", () => {
+    expect(isEqual(Promise.resolve(1), Promise.resolve(1))).toBe(false);
+  });
+});
+
+describe("isEqual - symbol-keyed object properties", () => {
+  it("returns true for objects with matching enumerable symbol keys and values", () => {
+    const sym = Symbol("key");
+    const a = { [sym]: 42 };
+    const b = { [sym]: 42 };
+    expect(isEqual(a, b)).toBe(true);
+  });
+
+  it("returns false when a symbol key is present on one object but not the other", () => {
+    const sym = Symbol("key");
+    const a = { [sym]: 1 };
+    const b = {};
+    expect(isEqual(a, b)).toBe(false);
+  });
+
+  it("returns false for objects with the same symbol key but different values", () => {
+    const sym = Symbol("key");
+    const a = { [sym]: 1 };
+    const b = { [sym]: 2 };
+    expect(isEqual(a, b)).toBe(false);
+  });
+
+  it("ignores non-enumerable symbol keys (does not affect equality result)", () => {
+    const sym = Symbol("hidden");
+    const a = {};
+    const b = {};
+    Object.defineProperty(a, sym, { value: 1, enumerable: false });
+    expect(isEqual(a, b)).toBe(true);
+  });
+});
+
+describe("isEqual - DataView", () => {
+  it("returns true for DataViews with aligned byteOffset and equal bytes", () => {
+    const buf = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]).buffer;
+    const a = new DataView(buf, 0, 8);
+    const b = new DataView(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]).buffer, 0, 8);
+    expect(isEqual(a, b)).toBe(true);
+  });
+
+  it("returns false for DataViews with aligned byteOffset and different bytes", () => {
+    const a = new DataView(new Uint8Array([1, 2, 3, 4]).buffer, 0, 4);
+    const b = new DataView(new Uint8Array([1, 2, 3, 9]).buffer, 0, 4);
+    expect(isEqual(a, b)).toBe(false);
+  });
+
+  it("returns true for DataViews with unaligned byteOffset and equal bytes", () => {
+    const backing = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8]).buffer;
+    const a = new DataView(backing, 1, 4);
+    const b = new DataView(new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8]).buffer, 1, 4);
+    expect(isEqual(a, b)).toBe(true);
+  });
+
+  it("returns false for DataViews with unaligned byteOffset and different bytes", () => {
+    const buf1 = new Uint8Array([0, 1, 2, 3, 4]).buffer;
+    const buf2 = new Uint8Array([0, 1, 2, 3, 9]).buffer;
+    const a = new DataView(buf1, 1, 4);
+    const b = new DataView(buf2, 1, 4);
+    expect(isEqual(a, b)).toBe(false);
   });
 });
