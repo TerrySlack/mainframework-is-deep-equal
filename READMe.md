@@ -109,7 +109,7 @@ import type { EqualityOptions } from '@mainframework/is-deep-equal';
 
 ### Primitives
 
-Primitive values are compared with strict equality. `NaN` compares as equal to itself. Symbols are compared by identity, so `Symbol.for` (global registry) symbols with the same key are equal, while locally created symbols are not.
+Numbers use `Object.is` (`NaN` equals itself; `+0` and `-0` are distinct). Other primitives use `===`. Symbols are compared by identity, so `Symbol.for` (global registry) symbols with the same key are equal, while locally created symbols are not.
 
 ```typescript
 isEqual(1, 1)                            // true
@@ -183,18 +183,19 @@ isEqual([1, , 3], [1, , 3],         { strictSparseArrays: true }) // true
 
 ### Date
 
-Dates are compared by their UTC time value.
+Dates are compared by their UTC time value. Two invalid dates (`getTime()` is `NaN`) compare as equal.
 
 ```typescript
 isEqual(new Date('2024-01-01'), new Date('2024-01-01'))  // true
 isEqual(new Date('2024-01-01'), new Date('2025-01-01'))  // false
+isEqual(new Date('invalid'), new Date('also-invalid'))   // true
 ```
 
 ---
 
 ### RegExp
 
-Regular expressions are compared by `source` and `flags`.
+Regular expressions are compared by `source`, `flags`, and `lastIndex`.
 
 ```typescript
 isEqual(/abc/gi, /abc/gi)  // true
@@ -366,7 +367,7 @@ isEqual(a, c)  // false
 
 ### Boxed Primitives
 
-By default, `new String('a')` and `'a'` are not equal — they have different types. Enable `normalizeBoxedPrimitives` to unwrap them before comparison.
+By default, `new String('a')` and `'a'` are not equal — they have different types. Enable `normalizeBoxedPrimitives` to unwrap boxed values when compared against a primitive; two boxed objects are still deep-compared as objects.
 
 ```typescript
 // Default — no normalization
@@ -442,7 +443,7 @@ isEqual(Promise.resolve(1),  Promise.resolve(1))  // false
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `strictSparseArrays` | `boolean` | `false` | When `true`, a missing array slot and an explicit `undefined` at the same index are treated as different |
-| `normalizeBoxedPrimitives` | `boolean` | `false` | When `true`, boxed primitives (`new String`, `new Number`, `new Boolean`) are unwrapped to their primitive value before comparison |
+| `normalizeBoxedPrimitives` | `boolean` | `false` | When `true`, unwrap boxed primitives only when the other side is a primitive; boxed-vs-boxed still uses deep object comparison |
 | `allowPrototypeMismatch` | `boolean` | `false` | When `true`, objects with different prototype chains are considered equal if their enumerable own properties match |
 
 ---
@@ -452,6 +453,8 @@ isEqual(Promise.resolve(1),  Promise.resolve(1))  // false
 **Circular reference non-isomorphism:** When a cycle is detected, the comparison optimistically returns `true` to break recursion. As a result, two structurally different cycles — for example, a self-loop (`a.self = a`) versus a two-node mutual reference (`a.next = b; b.next = a`) — may be reported as equal when they are not.
 
 **WeakMap / WeakSet / Promise:** These types are always `false` because their contents cannot be enumerated.
+
+**Detached `ArrayBuffer`:** Comparing a detached buffer to any value returns `false` without throwing.
 
 ---
 
