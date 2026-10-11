@@ -61,6 +61,10 @@ describe("isEqual - special types", () => {
     expect(isEqual(new Date("2020-01-01"), new Date("2021-01-01"))).toBe(false);
   });
 
+  it("compares invalid dates as equal", () => {
+    expect(isEqual(new Date("not-a-date"), new Date("also-invalid"))).toBe(true);
+  });
+
   it("compares different prototypes", () => {
     class A {
       x = 1;
@@ -202,6 +206,19 @@ describe("isEqual - circular references", () => {
 
     expect(isEqual(a, b)).toBe(false);
   });
+
+  it("returns false when a cycle-assumption cache would poison a later Set rematch", () => {
+    const c: any = { extra: 1 };
+    const d: any = { extra: 1 };
+    const x: any = { child: c, stamp: 1 };
+    const y: any = { child: d, stamp: 2 };
+    const x2: any = { child: c, stamp: 1 };
+    c.up = x;
+    d.up = y;
+    const p = { child: d, stamp: 2 };
+
+    expect(isEqual(new Set([x, c, p]), new Set([y, d, x2]))).toBe(false);
+  });
 });
 
 describe("isEqual - mixed types and edge cases", () => {
@@ -246,6 +263,23 @@ describe("isEqual - boxed primitives", () => {
     const s1 = Object.assign(new String("a"), { x: 1 });
     const s2 = Object.assign(new String("a"), { x: 2 });
     expect(isEqual(s1, s2)).toBe(false);
+  });
+
+  it("returns false for boxed Number and Boolean with different wrapped values", () => {
+    expect(isEqual(new Number(1), new Number(2))).toBe(false);
+    expect(isEqual(new Boolean(true), new Boolean(false))).toBe(false);
+  });
+
+  it("returns false for boxed numbers with the same extra keys and different wrapped values", () => {
+    const n1 = Object.assign(new Number(1), { x: 1 });
+    const n2 = Object.assign(new Number(2), { x: 1 });
+    expect(isEqual(n1, n2)).toBe(false);
+  });
+
+  it("still deep-compares boxed primitives with own properties when normalized", () => {
+    const s1 = Object.assign(new String("a"), { x: 1 });
+    const s2 = Object.assign(new String("a"), { x: 2 });
+    expect(isEqual(s1, s2, { normalizeBoxedPrimitives: true })).toBe(false);
   });
 });
 
@@ -326,6 +360,11 @@ describe("isEqual - NaN", () => {
   it("returns false for NaN compared to 0", () => {
     expect(isEqual(NaN, 0)).toBe(false);
   });
+
+  it("distinguishes +0 and -0", () => {
+    expect(isEqual(0, -0)).toBe(false);
+    expect(isEqual(-0, -0)).toBe(true);
+  });
 });
 
 describe("isEqual - Error additional cases", () => {
@@ -344,6 +383,18 @@ describe("isEqual - Error additional cases", () => {
     const e1 = new Error("fail", { cause: { code: 1 } });
     const e2 = new Error("fail", { cause: { code: 2 } });
     expect(isEqual(e1, e2)).toBe(false);
+  });
+
+  it("compares enumerable own symbol properties on errors", () => {
+    const sym = Symbol("key");
+    const e1 = new Error("oops");
+    const e2 = new Error("oops");
+    const e3 = new Error("oops");
+    (e1 as any)[sym] = 1;
+    (e2 as any)[sym] = 1;
+    (e3 as any)[sym] = 2;
+    expect(isEqual(e1, e2)).toBe(true);
+    expect(isEqual(e1, e3)).toBe(false);
   });
 });
 
@@ -468,6 +519,195 @@ describe("isEqual - DataView", () => {
     const buf2 = new Uint8Array([0, 1, 2, 3, 9]).buffer;
     const a = new DataView(buf1, 1, 4);
     const b = new DataView(buf2, 1, 4);
+    expect(isEqual(a, b)).toBe(false);
+  });
+
+  it("returns false for DataViews with different byteLength", () => {
+    const buf = new Uint8Array(8).buffer;
+    expect(isEqual(new DataView(buf, 0, 4), new DataView(buf, 0, 8))).toBe(false);
+  });
+});
+
+describe("isEqual - shapeKey bucketing", () => {
+  it("compares sets whose members exercise primitive shape keys", () => {
+    const sym = Symbol.for("shape");
+    const values = [null, true, false, 1n, sym, undefined];
+    expect(isEqual(new Set(values), new Set(values))).toBe(true);
+  });
+
+  it("compares sets containing Date, RegExp, ArrayBuffer, and typed array members", () => {
+    const buf = new Uint8Array([1]).buffer;
+    const a = new Set([new Date(0), /x/, buf, new Uint8Array([1])]);
+    const b = new Set([new Date(0), /x/, new Uint8Array([1]).buffer, new Uint8Array([1])]);
+    expect(isEqual(a, b)).toBe(true);
+  });
+
+  it("compares sets containing objects with null prototype", () => {
+    const x = Object.assign(Object.create(null), { k: 1 });
+    const y = Object.assign(Object.create(null), { k: 1 });
+    expect(isEqual(new Set([x]), new Set([y]))).toBe(true);
+  });
+
+  it("compares sets containing arrays", () => {
+    expect(isEqual(new Set([[1, 2]]), new Set([[1, 2]]))).toBe(true);
+  });
+});
+
+describe("isEqual - compareError branches", () => {
+  it("returns false for errors with different messages", () => {
+    expect(isEqual(new Error("a"), new Error("b"))).toBe(false);
+  });
+
+  it("returns false when enumerable own string key counts differ", () => {
+    expect(isEqual(Object.assign(new Error("e"), { code: 1 }), new Error("e"))).toBe(false);
+  });
+
+  it("returns false when enumerable own symbol key counts differ", () => {
+    const sym = Symbol("extra");
+    const e1 = new Error("e");
+    (e1 as any)[sym] = 1;
+    expect(isEqual(e1, new Error("e"))).toBe(false);
+  });
+});
+
+describe("isEqual - typed array byteLength", () => {
+  it("returns false for typed arrays with different byteLength", () => {
+    expect(isEqual(new Uint8Array(2), new Uint8Array(3))).toBe(false);
+  });
+});
+
+describe("isEqual - compareBytes aligned chunk path", () => {
+  it("returns false for equal-length ArrayBuffers that differ in an aligned 8-byte chunk", () => {
+    const a = new Uint8Array([0, 0, 0, 0, 0, 0, 0, 1]).buffer;
+    const b = new Uint8Array([0, 0, 0, 0, 0, 0, 0, 2]).buffer;
+    expect(isEqual(a, b)).toBe(false);
+  });
+});
+
+describe("isEqual - compareSet branches", () => {
+  it("returns false when set sizes differ", () => {
+    expect(isEqual(new Set([1, 2]), new Set([1]))).toBe(false);
+  });
+
+  it("returns false when set bucket counts differ", () => {
+    expect(isEqual(new Set([1, 2]), new Set([1, "2"]))).toBe(false);
+  });
+
+  it("returns false when a set bucket key is missing on the other side", () => {
+    expect(isEqual(new Set([1]), new Set(["1"]))).toBe(false);
+  });
+
+  it("returns false when matching set bucket lengths differ", () => {
+    expect(isEqual(new Set([{ a: 1 }, { b: 2 }, 9]), new Set([{ a: 1 }, 2, 3]))).toBe(false);
+  });
+});
+
+describe("isEqual - compareMap branches", () => {
+  it("returns false when map sizes differ", () => {
+    expect(isEqual(new Map([[1, 1]]), new Map([[1, 1], [2, 2]]))).toBe(false);
+  });
+
+  it("returns false when map bucket counts differ", () => {
+    expect(isEqual(new Map([["a", 1]]), new Map([[1, 1]]))).toBe(false);
+    expect(
+      isEqual(new Map([[{ x: 1 }, 1], [{ y: 2 }, 2]]), new Map([[{ x: 1 }, 1], [2, 2]])),
+    ).toBe(false);
+  });
+
+  it("returns false when a map bucket key is missing on the other side", () => {
+    expect(isEqual(new Map([[{ a: 1 }, 1]]), new Map([[1, 1]]))).toBe(false);
+  });
+
+  it("returns false when matching map bucket lengths differ", () => {
+    const mapA = new Map<unknown, number>([
+      [{ x: 1 }, 1],
+      [{ y: 2 }, 2],
+      [1, 3],
+    ]);
+    const mapB = new Map<unknown, number>([
+      [{ x: 1 }, 1],
+      [2, 2],
+      [3, 3],
+    ]);
+    expect(isEqual(mapA, mapB)).toBe(false);
+  });
+});
+
+describe("isEqual - memo cache hits", () => {
+  it("reuses a successful memo when the same object pair is compared again", () => {
+    const left = { v: 1 };
+    const right = { v: 1 };
+    expect(isEqual({ p: left, q: left }, { p: right, q: right })).toBe(true);
+  });
+
+  it("reuses a failed memo when the same object pair is compared again", () => {
+    const left = { v: 1 };
+    const right = { v: 2 };
+    expect(isEqual({ p: left, q: left }, { p: right, q: right })).toBe(false);
+  });
+});
+
+describe("isEqual - prototype chain without constructor mismatch", () => {
+  it("returns false when prototypes differ but own constructor properties match", () => {
+    const C = function Ctor() {};
+    const a = Object.assign(Object.create(null), { constructor: C, x: 1 });
+    const b = Object.assign(Object.create(Object.prototype), { constructor: C, x: 1 });
+    expect(isEqual(a, b)).toBe(false);
+  });
+});
+
+describe("isEqual - boxed primitive valueOf", () => {
+  it("returns false for boxed booleans with different valueOf results", () => {
+    expect(isEqual(new Boolean(true), new Boolean(false))).toBe(false);
+  });
+
+  it("returns false for boxed strings with different valueOf results", () => {
+    expect(isEqual(new String("a"), new String("b"))).toBe(false);
+  });
+
+  it("compares boxed numbers with equal valueOf results via Object.is", () => {
+    expect(isEqual(new Number(NaN), new Number(NaN))).toBe(true);
+  });
+
+  it("deep-compares two boxed strings when normalizeBoxedPrimitives is enabled", () => {
+    expect(isEqual(new String("a"), new String("a"), { normalizeBoxedPrimitives: true })).toBe(true);
+  });
+});
+
+describe("isEqual - WeakMap vs Map", () => {
+  it("returns false when one side is a WeakMap and the other is a Map", () => {
+    expect(isEqual(new WeakMap(), new Map())).toBe(false);
+  });
+});
+
+const detachArrayBuffer = (byteLength = 8): ArrayBuffer => {
+  const buffer = new ArrayBuffer(byteLength);
+  structuredClone(new Uint8Array(buffer), { transfer: [buffer] });
+  return buffer;
+};
+
+describe("isEqual - detached ArrayBuffer and DataView", () => {
+  it("returns false when comparing two detached ArrayBuffers without throwing", () => {
+    expect(isEqual(detachArrayBuffer(), detachArrayBuffer())).toBe(false);
+  });
+
+  it("returns false when comparing a detached ArrayBuffer to a normal ArrayBuffer without throwing", () => {
+    expect(isEqual(detachArrayBuffer(), new ArrayBuffer(8))).toBe(false);
+  });
+
+  it("returns false when comparing DataViews backed by detached buffers without throwing", () => {
+    const buffer = new ArrayBuffer(4);
+    const a = new DataView(buffer, 0, 4);
+    structuredClone(new Uint8Array(buffer), { transfer: [buffer] });
+    const b = new DataView(new ArrayBuffer(4), 0, 4);
+    expect(isEqual(a, b)).toBe(false);
+  });
+
+  it("returns false when comparing typed arrays backed by detached buffers without throwing", () => {
+    const buffer = new ArrayBuffer(4);
+    const a = new Uint8Array(buffer);
+    structuredClone(new Uint8Array(buffer), { transfer: [buffer] });
+    const b = new Uint8Array(4);
     expect(isEqual(a, b)).toBe(false);
   });
 });
