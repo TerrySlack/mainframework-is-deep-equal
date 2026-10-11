@@ -250,6 +250,9 @@ const compareBytes = (a: Uint8Array, b: Uint8Array): boolean => {
   return true;
 };
 
+const isDetachedArrayBuffer = (buffer: ArrayBufferLike): boolean =>
+  buffer instanceof ArrayBuffer && buffer.detached;
+
 const compareArrayBuffer = (a: ArrayBuffer, b: ArrayBuffer): boolean => {
   if (a.detached || b.detached) {
     return false;
@@ -263,7 +266,7 @@ const compareArrayBuffer = (a: ArrayBuffer, b: ArrayBuffer): boolean => {
 };
 
 const compareDataView = (a: DataView, b: DataView): boolean => {
-  if (a.buffer.detached || b.buffer.detached) {
+  if (isDetachedArrayBuffer(a.buffer) || isDetachedArrayBuffer(b.buffer)) {
     return false;
   }
 
@@ -290,7 +293,7 @@ const compareDataView = (a: DataView, b: DataView): boolean => {
 };
 
 const compareTypedArray = (a: ArrayBufferView, b: ArrayBufferView): boolean => {
-  if (a.buffer.detached || b.buffer.detached) {
+  if (isDetachedArrayBuffer(a.buffer) || isDetachedArrayBuffer(b.buffer)) {
     return false;
   }
 
